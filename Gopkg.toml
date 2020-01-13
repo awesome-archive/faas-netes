@@ -1,23 +1,23 @@
+[[constraint]]
+  name = "github.com/openfaas/faas"
+  version = "0.18.0"
+
+[[constraint]]
+  name = "github.com/openfaas/faas-provider"
+  version = "0.14.0"
 
 [[constraint]]
   name = "github.com/gorilla/mux"
   version = "1.6.1"
 
-[[constraint]]
-  name = "github.com/openfaas/faas"
-  version = "0.9.14"
-
-[[constraint]]
-  name = "github.com/openfaas/faas-provider"
-  version = "0.8.1"
-
-[[constraint]]
+[[override]]
   name = "k8s.io/apimachinery"
-  branch = "release-1.8"
+  branch = "release-1.12"
 
-[[constraint]]
+
+[[override]]
   name = "k8s.io/client-go"
-  version = "6.0.0"
+  version = "v9.0.0"
 
 [prune]
   go-tests = true

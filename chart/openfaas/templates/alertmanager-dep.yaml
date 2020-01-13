@@ -1,4 +1,7 @@
-apiVersion: apps/v1beta1 # for versions before 1.6.0 use extensions/v1beta1
+{{- $functionNs := default .Release.Namespace .Values.functionNamespace }}
+{{- if .Values.alertmanager.create }}
+---
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
@@ -11,12 +14,15 @@ metadata:
   namespace: {{ .Release.Namespace | quote }}
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      app: alertmanager
   template:
     metadata:
       labels:
         app: alertmanager
       annotations:
-        sidecar.istio.io/inject: "false"
+        sidecar.istio.io/inject: "true"
         checksum/alertmanager-config: {{ include (print $.Template.BasePath "/alertmanager-cfg.yaml") . | sha256sum | quote  }}
     spec:
       containers:
@@ -27,7 +33,13 @@ spec:
           - "alertmanager"
           - "--config.file=/alertmanager.yml"
           - "--storage.path=/alertmanager"
+          - "--cluster.listen-address="
         livenessProbe:
+          {{- if .Values.httpProbe }}
+          httpGet:
+            path: /-/ready
+            port: 9093
+          {{- else }}
           exec:
             command:
             - wget
@@ -36,8 +48,14 @@ spec:
             - --timeout=30
             - --spider
             - http://localhost:9093/-/ready
+          {{- end }}
           timeoutSeconds: 30
         readinessProbe:
+          {{- if .Values.httpProbe }}
+          httpGet:
+            path: /-/ready
+            port: 9093
+          {{- else }}
           exec:
             command:
             - wget
@@ -46,10 +64,13 @@ spec:
             - --timeout=30
             - --spider
             - http://localhost:9093/-/ready
+          {{- end }}
           timeoutSeconds: 30
         ports:
         - containerPort: 9093
           protocol: TCP
+        resources:
+          {{- .Values.alertmanager.resources | toYaml | nindent 12 }}
         volumeMounts:
         - mountPath: /alertmanager.yml
           name: alertmanager-config
@@ -84,3 +105,4 @@ spec:
       tolerations:
 {{ toYaml . | indent 8 }}
     {{- end }}
+{{- end }}

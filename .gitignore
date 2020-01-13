@@ -15,4 +15,8 @@
 .idea
 
 faas-netes
+**/password.txt
+**/gateway-password.txt
 
+.vscode
+of_kind_portforward.pid
