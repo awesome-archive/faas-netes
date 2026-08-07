@@ -1,0 +1,34 @@
+name: Validate Chart
+
+on:
+  push:
+    paths:
+      - chart/**
+      - contrib/validate_chart.sh
+      - contrib/lint_chart.sh
+      - .github/workflows/helm.yaml
+  pull_request:
+    paths:
+      - chart/**
+      - contrib/validate_chart.sh
+      - contrib/lint_chart.sh
+      - .github/workflows/helm.yaml
+
+jobs:
+  lint-chart:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - uses: alexellis/arkade-get@master
+        with:
+          helm: latest
+          kubeconform: latest
+          kubeval: latest
+      - name: Run helm lint and kubeconform
+        run: ./contrib/lint_chart.sh
+      - name: Run kubeval
+        env:
+          KUBEVAL_SCHEMA_LOCATION: "https://raw.githubusercontent.com/yannh/kubernetes-json-schema/master/"
+          KUBERNETES_VERSION: v1.31.1
+        run: ./contrib/validate_chart.sh

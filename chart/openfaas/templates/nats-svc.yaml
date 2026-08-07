@@ -1,4 +1,4 @@
-{{- if .Values.async }}
+{{- if and (or .Values.async (or .Values.eventSubscription.metering.enabled .Values.eventSubscription.auditing.enabled)) (not .Values.nats.external.enabled ) }}
 ---
 apiVersion: v1
 kind: Service
@@ -16,12 +16,7 @@ spec:
   ports:
     - port: 4222
       protocol: TCP
-      name: clients
-    {{- if .Values.nats.enableMonitoring }}
-    - port: 8222
-      protocol: TCP
-      name: monitoring
-    {{- end }}
+      name: tcp
   selector:
     app: nats
 {{- end }}

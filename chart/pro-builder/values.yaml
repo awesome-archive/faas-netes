@@ -1,0 +1,107 @@
+# This component is licensed for OpenFaaS Standard/Enterprise customers only.
+# Purchase or obtain a trial license at https://openfaas.com/pricing/
+
+# You will need to create a license named "openfaas-license" - see the
+# chart README for detailed instructions.
+
+# Set if using AWS IRSA to access ECR with a service account
+serviceAccount: ""
+
+# Set at the Pod level
+securityContext: {}
+
+# Use this permission for AWS IRSA.
+# securityContext:
+#   fsGroup: 65534
+
+# image is for the pro-builder API
+proBuilder:
+  image: ghcr.io/openfaasltd/pro-builder:0.6.0
+
+  # Set to 0 for unlimited, or some non-zero value for a hard limit
+  # the builder will return a HTTP 429 status code, then the client
+  # must retry the request.
+  # A function executed via the async queue will be retried, so can be
+  # a convenient way to build functions without blocking the client.
+  maxInflight: 0
+
+  resources:
+    requests:
+      memory: "64Mi"
+      cpu: "100m"
+    # limits:
+    #   memory: "256Mi"
+
+buildkitRootless:
+  # Image used when running buildkit in rootless mode.
+  image: moby/buildkit:v0.32.2-rootless
+
+# buildkit.image is for the buildkit daemon
+# Check for the latest release on GitHub: https://github.com/moby/buildkit/releases
+#
+# Both configurations are "rootless", however the rootless: true mode does not
+# require Buildkit to run as a privileged container and is preferred.
+buildkit:
+  # A configuration which uses a privileged container for when
+  # your nodes have issues running in rootless mode
+  #
+  # Use rootless if possible, and if not, set up a dedicated
+  # nodepool for the function builder pods, which is recycled often
+  # through the use of spot instances or preemptive VMs.
+  #
+  # image: moby/buildkit:v0.32.2
+  # rootless: false
+  # securityContext:
+  #   runAsUser: 0
+  #   runAsGroup: 0
+  #   privileged: true
+
+  # For a rootless configuration, preferred, if the configuration
+  # and Kernel version of your Kubernetes nodes supports it
+  #
+  image: moby/buildkit:v0.32.2
+  rootless: true
+
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "2000m"
+    # limits:
+    #   memory: "4Gi"
+
+# Use a shared credentials file for ECR credentials:
+# The format is the standard ini-type AWS file format.
+# This is not needed if using IAM roles for service accounts (IRSA) on EKS.
+#
+# kubectl create secret generic -n openfaas \
+#   aws-ecr-credentials --from-file aws-ecr-credentials=$HOME/ecr-credentials.txt
+awsCredentialsSecret: ""
+
+# disableHmac is used to authenticate requests and should be set to false
+disableHmac: false
+
+# enableLchown is usually set to false
+enableLchown: false
+
+buildSecrets:
+  # Name of the Kubernetes Secret containing the nacl/box private key.
+  # Set this to enable build secrets — the feature is on when a key is configured.
+  privateKeySecret: ""
+
+  # Key within privateKeySecret to mount into the Pod.
+  privateKeyKey: key
+
+  # Directory mount for the private key file within the pro-builder container.
+  mountPath: /var/secrets/buildkit
+
+imagePullPolicy: IfNotPresent
+
+fullnameOverride: "pro-builder"
+
+replicas: 1
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

@@ -1,3 +1,8 @@
+{{- $functionNs := default .Release.Namespace .Values.functionNamespace }}
+
+{{- if .Values.prometheus.create }}
+{{- if eq .Values.openfaasPro false }}
+---
 kind: ConfigMap
 apiVersion: v1
 metadata:
@@ -20,13 +25,19 @@ data:
     rule_files:
         - 'alert.rules.yml'
 
+    alerting:
+      alertmanagers:
+      - static_configs:
+        - targets:
+          - alertmanager:9093
+
     scrape_configs:
       - job_name: 'prometheus'
-        scrape_interval: 5s
+        scrape_interval: 10s
         static_configs:
           - targets: ['localhost:9090']
 
-      - job_name: 'kubernetes-pods'
+      - job_name: 'openfaas-pods'
         scrape_interval: 5s
         honor_labels: false
         kubernetes_sd_configs:
@@ -52,18 +63,10 @@ data:
           replacement: $1:$2
           target_label: __address__
 
-    alerting:
-      alertmanagers:
-      - static_configs:
-        - targets:
-          - alertmanager:9093
-
   alert.rules.yml: |
     groups:
       - name: openfaas
         rules:
-        - alert: service_down
-          expr: up == 0
         - alert: APIHighInvocationRate
           expr: sum(rate(gateway_function_invocation_total{code="200"}[10s])) BY (function_name) > 5
           for: 5s
@@ -73,3 +76,6 @@ data:
           annotations:
             description: High invocation total on "{{ "{{" }}$labels.function_name{{ "}}" }}"
             summary: High invocation total on "{{ "{{" }}$labels.function_name{{ "}}" }}"
+
+{{- end }}
+{{- end }}

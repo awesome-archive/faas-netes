@@ -1,0 +1,72 @@
+# This component is licensed for OpenFaaS Standard/Enterprise customers only.
+# Purchase or obtain a trial license at https://openfaas.com/pricing/
+
+# You will need to create a license named "openfaas-license" - see the
+# chart README for detailed instructions.
+
+image: ghcr.io/openfaasltd/jetstream-queue-worker:0.5.9
+
+replicas: 1
+
+# Change this to your queue name.
+# Allowed characters (a - z), (0 - 9), - and _
+queueName: ""
+mode: static
+maxInflight: 1
+# Enable adaptive concurrency limiting for functions.
+# This setting only takes effect when mode is set to "function".
+adaptiveConcurrency: true
+
+queuePartitions: 1
+partition: 0
+
+consumer:
+  inactiveThreshold: "30s"
+
+upstreamTimeout: "1m"
+
+maxRetryAttempts: "100"
+maxRetryWait: "120s"
+initialRetryWait: "10s"
+# 408 Request Timeout message
+# 429 Too Many Requests
+# 500 Internal Server Error
+# 502 Bad Gateway
+# 503 Service Unavailable
+# 504 Gateway Timeout
+httpRetryCodes: "408,429,500,502,503,504"
+
+insecureTLS: false
+
+gateway:
+  host: "http://gateway.openfaas"
+  port: "8080"
+
+nats:
+  host: "nats.openfaas"
+  port: "4222"
+  stream:
+    name: "custom-request"
+    replicas: 1
+  consumer:
+    durableName: "custom-workers"
+    # Do not change ackWait from 30s. Only gateway.upstreamTimeout sets the
+    # maximum function duration.
+    ackWait: "30s"
+
+logs:
+  debug: false
+  format: "console"
+
+resources:
+  requests:
+    memory: "120Mi"
+    cpu: "50m"
+
+imagePullPolicy: IfNotPresent
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity: {}

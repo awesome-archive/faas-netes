@@ -1,0 +1,210 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+{{- if .Values.buildkit.rootless }}
+  annotations:
+    container.apparmor.security.beta.kubernetes.io/buildkitd: unconfined
+{{- end }}
+  labels:
+    app: {{ template "builder.name" . }}
+    component: pro-builder
+    chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+    heritage: {{ .Release.Service }}
+    release: {{ .Release.Name }}
+    app.kubernetes.io/name: {{ template "builder.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Chart.Version }}
+    app.kubernetes.io/component: pro-builder
+    app.kubernetes.io/part-of: openfaas
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    helm.sh/chart: {{ .Chart.Name }}-{{ .Chart.Version | replace "+" "_" }}
+  name: {{ template "builder.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+spec:
+  replicas: {{ .Values.replicas }}
+  selector:
+    matchLabels:
+      app: {{ template "builder.name" . }}
+      component: pro-builder
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8081"
+      labels:
+        app: {{ template "builder.name" . }}
+        component: pro-builder
+    spec:
+{{- if .Values.securityContext }}
+      securityContext:
+        {{- toYaml .Values.securityContext | nindent 8 }}
+{{- end }}
+      volumes:
+        - name: registry-secret
+          secret:
+            defaultMode: 420
+            secretName: registry-secret
+        - name: payload-secret
+          secret:
+            defaultMode: 420
+            secretName: payload-secret
+        - name: license
+          secret:
+            defaultMode: 420
+            secretName: openfaas-license
+        {{- if .Values.buildSecrets.privateKeySecret }}
+        - name: build-secrets-key
+          secret:
+            secretName: {{ .Values.buildSecrets.privateKeySecret }}
+            items:
+              - key: {{ .Values.buildSecrets.privateKeyKey | quote }}
+                path: {{ .Values.buildSecrets.privateKeyKey | quote }}
+        {{- end }}
+        - name: builder-workspace
+          emptyDir: {}
+        - name: buildkit-workspace
+          emptyDir: {}
+        {{- if .Values.awsCredentialsSecret }}
+        - name: aws-credentials
+          secret:
+            secretName: {{ .Values.awsCredentialsSecret }}
+        {{- end}}
+        - name: socket-dir
+          emptyDir: {}
+      {{- if .Values.serviceAccount}}
+      serviceAccountName: {{ .Values.serviceAccount | quote }}
+      {{- end }}
+      containers:
+      - name: pro-builder
+        image: {{ .Values.proBuilder.image }}
+        imagePullPolicy: {{ .Values.imagePullPolicy }}
+        args:
+          - "-license-file=/var/secrets/license/license"
+        env:
+          - name: buildkit_server_name
+            value: "127.0.0.1"
+          - name: enable_lchown
+            value: {{ .Values.enableLchown  | quote}}
+          - name: insecure
+            value: "false"
+          - name: buildkit_url
+            value: "unix:///home/app/.local/run/buildkit/buildkitd.sock"
+          - name: "disable_hmac"
+            value: {{ .Values.disableHmac | quote }}
+          - name: "max_inflight"
+            value: {{ or .Values.proBuilder.maxInflight 0  | quote }}
+          {{- if .Values.buildSecrets.privateKeySecret }}
+          - name: build_secrets_private_key_path
+            value: {{ printf "%s/%s" .Values.buildSecrets.mountPath .Values.buildSecrets.privateKeyKey | quote }}
+          {{- end }}
+          {{- if .Values.awsCredentialsSecret }}
+          - name: AWS_SHARED_CREDENTIALS_FILE
+            value: /var/secrets/aws-credentials/{{ .Values.awsCredentialsSecret }}
+          {{- end }}
+        ports:
+        - containerPort: 8080
+          protocol: TCP
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 2
+          periodSeconds: 10
+          failureThreshold: 2
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 2
+          periodSeconds: 5
+          failureThreshold: 1
+        resources:
+          {{- .Values.proBuilder.resources | toYaml | nindent 12 }}
+        {{- with .Values.proBuilder.securityContext }}
+        securityContext:
+          {{- . | toYaml | nindent 12 }}
+        {{- else }}
+        securityContext:
+          runAsGroup: 1000
+        {{- end }}
+        volumeMounts:
+        - name: socket-dir
+          mountPath: /home/app/.local/run/buildkit
+        - name: registry-secret
+          readOnly: true
+          mountPath: "/home/app/.docker/"
+        - name: payload-secret
+          readOnly: true
+          mountPath: "/var/openfaas/secrets/"
+        - name: license
+          readOnly: true
+          mountPath: "/var/secrets/license"
+        {{- if .Values.buildSecrets.privateKeySecret }}
+        - name: build-secrets-key
+          readOnly: true
+          mountPath: {{ .Values.buildSecrets.mountPath | quote }}
+        {{- end }}
+        - name: builder-workspace
+          mountPath: /tmp/
+          readOnly: false
+        {{- if .Values.awsCredentialsSecret }}
+        - name: aws-credentials
+          readOnly: true
+          mountPath: "/var/secrets/aws-credentials"
+        {{- end }}
+      - name: buildkit
+        args:
+        {{- if .Values.buildkit.rootless }}
+          - "--addr=unix:///home/user/.local/run/buildkit/buildkitd.sock"
+          - "--oci-worker-no-process-sandbox"
+        {{- else }}
+          - "--addr=unix:///run/buildkit/buildkitd.sock"
+          - "--group=1000"
+        {{- end }}
+        {{- if .Values.buildkit.rootless }}
+        image: {{ .Values.buildkitRootless.image }}
+        {{- else }}
+        image: {{ .Values.buildkit.image }}
+        {{- end }}
+        imagePullPolicy: {{ .Values.imagePullPolicy | quote }}
+        ports:
+        - containerPort: 1234
+          protocol: TCP
+        resources:
+          {{- .Values.buildkit.resources | toYaml | nindent 12 }}
+        {{- with .Values.buildkit.securityContext }}
+        securityContext:
+          {{- . | toYaml | nindent 12 }}
+        {{- else }}
+       {{- if .Values.buildkit.rootless }}
+        securityContext:
+          seccompProfile:
+            type: Unconfined
+          runAsUser: 1000
+          runAsGroup: 1000
+          privileged: false
+        {{- else }}
+        securityContext:
+          runAsUser: 0
+          runAsGroup: 0
+          privileged: true
+        {{- end }}
+        {{- end }}
+        volumeMounts:
+        - name: socket-dir
+          {{- if .Values.buildkit.rootless }}
+          mountPath: /home/user/.local/run/buildkit
+          {{- else }}
+          mountPath: /run/buildkit/
+          {{- end }}
+        - name: buildkit-workspace
+          mountPath: /tmp/
+          readOnly: false
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

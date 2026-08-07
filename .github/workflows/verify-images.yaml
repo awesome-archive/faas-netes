@@ -1,0 +1,20 @@
+name: Verify Chart Images
+
+on:
+  push:
+    paths:
+      - 'chart/**'
+
+jobs:
+  verifyImages:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@master
+      - name: Install arkade
+        uses: alexellis/setup-arkade@v3
+
+      - name: Verify chart images
+        id: verify_images
+        run: |
+          VERBOSE=true make verify-charts

@@ -1,5 +1,5 @@
-{{- if .Values.async }}
-apiVersion: apps/v1beta1 # for versions before 1.6.0 use extensions/v1beta1
+{{- if and (or .Values.async (or .Values.eventSubscription.metering.enabled .Values.eventSubscription.auditing.enabled)) (not .Values.nats.external.enabled ) }}
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
@@ -12,35 +12,55 @@ metadata:
   namespace: {{ .Release.Namespace | quote }}
 spec:
   replicas: 1
+  selector:
+    matchLabels:
+      app: nats
   template:
     metadata:
       annotations:
-        sidecar.istio.io/inject: "false"
-        prometheus.io.scrape: "false"
+        prometheus.io/scrape: "false"
       labels:
         app: nats
     spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       containers:
       - name:  nats
-        image: {{ .Values.nats.image }}
+        resources:
+          {{- .Values.nats.resources | toYaml | nindent 12 }}
+        {{- if .Values.openfaasPro }}
+        image: {{ include "openfaas.image" (dict "image" .Values.nats.image "registryPrefix" .Values.registryPrefix) }}
+        {{- else }}
+        image: {{ include "openfaas.image" (dict "image" .Values.stan.image "registryPrefix" .Values.registryPrefix) }}
+        {{- end }}
         imagePullPolicy: {{ .Values.openfaasImagePullPolicy }}
         ports:
         - containerPort: 4222
           protocol: TCP
-        {{- if .Values.nats.enableMonitoring }}
-        - containerPort: 8222
-          protocol: TCP
-        {{- end }}
+        {{- if not .Values.openfaasPro }}
         command: ["/nats-streaming-server"]
+        {{- end }}
         args:
+          {{- if .Values.openfaasPro }}
+          - --js
+          {{- else}}
           - --store
           - memory
           - --cluster_id
           - faas-cluster
-          {{- if .Values.nats.enableMonitoring }}
-          - -m
-          - "8222"
           {{- end }}
+        {{- if .Values.securityContext }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        {{- end }}
+        volumeMounts:
+        - mountPath: /tmp/nats
+          name: nats-data
+      volumes:
+      - name: nats-data
+        emptyDir: {}
     {{- with .Values.nodeSelector }}
       nodeSelector:
 {{ toYaml . | indent 8 }}

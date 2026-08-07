@@ -8,9 +8,20 @@
 <!--- If describing a bug, tell us what happens instead of the expected behavior -->
 <!--- If suggesting a change/improvement, explain the difference from current behavior -->
 
-## Possible Solution
-<!--- Not obligatory, but suggest a fix/reason for the bug, -->
-<!--- or ideas how to implement the addition or change -->
+## Why is this needed?
+<!--- Why is this change required? What problem does it solve? -->
+<!--- If it fixes an open issue, please link to the issue here. -->
+- [ ] I have raised an issue to propose this change ([required](https://github.com/openfaas/faas/blob/master/CONTRIBUTING.md))
+
+## Who is this for?
+
+What company is this for? Are you listed in the [ADOPTERS.md](https://github.com/openfaas/faas/blob/master/ADOPTERS.md) file?
+
+## List All Possible Solutions and Workarounds
+<!--- Suggest a fix/reason for the bug, or ideas how to implement  -->
+<!--- the addition or change -->
+<!--- Is there a workaround which could avoid making changes? -->
+
 
 ## Steps to Reproduce (for bugs)
 <!--- Provide a link to a live example, or an unambiguous set of steps to -->

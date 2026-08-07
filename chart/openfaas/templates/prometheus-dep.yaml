@@ -1,4 +1,7 @@
-apiVersion: apps/v1beta1 # for versions before 1.6.0 use extensions/v1beta1
+{{- $functionNs := default .Release.Namespace .Values.functionNamespace }}
+{{- if .Values.prometheus.create }}
+---
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
@@ -11,23 +14,52 @@ metadata:
   namespace: {{ .Release.Namespace | quote }}
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: prometheus
   template:
     metadata:
       labels:
         app: prometheus
       annotations:
-        sidecar.istio.io/inject: "false"
+        sidecar.istio.io/inject: "true"
         checksum/prometheus-config: {{ include (print $.Template.BasePath "/prometheus-cfg.yaml") . | sha256sum | quote }}
+        {{- if .Values.prometheus.annotations }}
+          {{- toYaml .Values.prometheus.annotations | nindent 8 }}
+        {{- end }}
     spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
       serviceAccountName: {{ .Release.Name }}-prometheus
+      {{- if .Values.prometheus.fsGroup }}
+      securityContext:
+        fsGroup: {{ .Values.prometheus.fsGroup }}
+      {{- end }}
       containers:
       - name: prometheus
-        image: {{ .Values.prometheus.image }}
+        resources:
+          {{- .Values.prometheus.resources | toYaml | nindent 12 }}
+        image: {{ include "openfaas.image" (dict "image" .Values.prometheus.image "registryPrefix" .Values.registryPrefix) }}
         command:
           - "prometheus"
           - "--config.file=/etc/prometheus/prometheus.yml"
+          {{- if .Values.prometheus.retention.time }}
+          - "--storage.tsdb.retention.time={{.Values.prometheus.retention.time}}"
+          {{- end }}
+          {{-  if .Values.prometheus.retention.size }}
+          - "--storage.tsdb.retention.size={{.Values.prometheus.retention.size}}"
+          {{- end }}
         imagePullPolicy: {{ .Values.openfaasImagePullPolicy }}
         livenessProbe:
+          {{- if .Values.httpProbe }}
+          httpGet:
+            path: /-/healthy
+            port: 9090
+          {{- else }}
           exec:
             command:
             - wget
@@ -36,8 +68,14 @@ spec:
             - --timeout=30
             - --spider
             - http://localhost:9090/-/healthy
+          {{- end }}
           timeoutSeconds: 30
         readinessProbe:
+          {{- if .Values.httpProbe }}
+          httpGet:
+            path: /-/healthy
+            port: 9090
+          {{- else }}
           exec:
             command:
             - wget
@@ -46,17 +84,36 @@ spec:
             - --timeout=30
             - --spider
             - http://localhost:9090/-/healthy
+          {{- end }}
           timeoutSeconds: 30
         ports:
         - containerPort: 9090
           protocol: TCP
+
+        {{- if .Values.prometheus.securityContext }}
+        securityContext:
+          {{- toYaml .Values.prometheus.securityContext | nindent 10 }}
+        {{- else if .Values.securityContext }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 10 }}
+        {{- end }}
+
         volumeMounts:
         - mountPath: /etc/prometheus/prometheus.yml
           name: prometheus-config
           subPath: prometheus.yml
+{{- if .Values.openfaasPro }}
+        - mountPath: /etc/prometheus/prometheus-rules.yml
+          name: prometheus-config
+          subPath: prometheus-rules.yml
+{{- end }}
+{{- if eq .Values.openfaasPro false }}
         - mountPath: /etc/prometheus/alert.rules.yml
           name: prometheus-config
           subPath: alert.rules.yml
+{{- end}}
+        - mountPath: /prometheus/data
+          name: prom-data
       volumes:
         - name: prometheus-config
           configMap:
@@ -65,9 +122,30 @@ spec:
               - key: prometheus.yml
                 path: prometheus.yml
                 mode: 0644
+{{- if eq .Values.openfaasPro false }}
               - key: alert.rules.yml
                 path: alert.rules.yml
                 mode: 0644
+{{- end }}
+{{- if .Values.openfaasPro }}
+              - key: prometheus-rules.yml
+                path: prometheus-rules.yml
+                mode: 0644
+{{- end }}
+
+{{- if and .Values.prometheus.pvc.enabled .Values.openfaasPro }}
+        - name: prom-data
+          persistentVolumeClaim:
+  {{- if .Values.prometheus.pvc.name }}
+            claimName: {{.Values.prometheus.pvc.name}}
+  {{- else }}
+            claimName: prometheus-data
+  {{- end }}
+{{- else }}
+        - name: prom-data
+          emptyDir: {}
+{{- end }}
+
     {{- with .Values.nodeSelector }}
       nodeSelector:
 {{ toYaml . | indent 8 }}
@@ -80,3 +158,5 @@ spec:
       tolerations:
 {{ toYaml . | indent 8 }}
     {{- end }}
+
+{{- end }}

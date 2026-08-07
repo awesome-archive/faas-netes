@@ -15,4 +15,27 @@
 .idea
 
 faas-netes
+**/password.txt
+**/gateway-password.txt
 
+.vscode
+of_kind_portforward.pid
+/kind*
+/kubectl
+/yaml_armhf
+/yaml_arm64
+
+/broker-*
+
+/chart/pro-builder/out
+/chart/pro-builder/payload.txt
+/pgconnector.yaml
+
+jwt_key
+jwt_key.pub
+/*.pid
+/*.txt
+/.secrets/*
+
+/pro.sh
+/pro2.sh
